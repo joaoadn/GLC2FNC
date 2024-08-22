@@ -23,8 +23,8 @@ public class GLCtoFNC {
 
     // Remove produções vazias
     private static void removeEmptyProductions(ArrayList<Producao> producoes) {
-        producoes.removeIf(producao -> producao.getLadoDir().equals(".") || producao.getLadoDir().isEmpty());
-    }    
+        producoes.removeIf(producao -> producao.getLadoDir().isEmpty());
+    }
 
     // Substitui terminais por variáveis
     private static void replaceTerminalsWithVariables(ArrayList<Producao> producoes, ArrayList<Variavel> variaveis) {
@@ -39,7 +39,7 @@ public class GLCtoFNC {
             }
             producao.setLadoDir(novoLadoDir.toString());
         }
-    }    
+    }
 
     // Garante que cada produção tenha no máximo duas variáveis no lado direito
     private static void ensureTwoVariablesPerProduction(ArrayList<Producao> producoes, ArrayList<Variavel> variaveis) {
@@ -107,14 +107,10 @@ public class GLCtoFNC {
     // Gera uma nova variável
     private static String generateNewVariable(ArrayList<Variavel> variaveis) {
         char ultimaLetra = variaveis.isEmpty() ? 'A' : variaveis.get(variaveis.size() - 1).getLadoEsq().charAt(0);
-        if (ultimaLetra >= 'Z') {
-            throw new RuntimeException("Número máximo de variáveis atingido.");
-        }
         String novaVariavel = String.valueOf((char) (ultimaLetra + 1));
         variaveis.add(new Variavel(novaVariavel));
         return novaVariavel;
     }
-    
 
     // Retorna uma variável existente ou cria uma nova para um terminal
     private static String getOrCreateVariable(ArrayList<Variavel> variaveis, char terminal) {
