@@ -1,27 +1,18 @@
-// Classe para representar uma produção na GLC
+import java.util.*;
+// Classe para representar uma Produção
 class Producao {
-    private String ladoEsq;
-    private String ladoDir;
+    String esquerda;
+    List<String> direita;
 
-    public Producao(String ladoEsq, String ladoDir) {
-        this.ladoEsq = ladoEsq;
-        this.ladoDir = ladoDir;
+    // Construtor
+    public Producao(String esquerda, List<String> direita) {
+        this.esquerda = esquerda;
+        this.direita = direita;
     }
-
-    public String getLadoEsq() {
-        return ladoEsq;
-    }
-
-    public String getLadoDir() {
-        return ladoDir;
-    }
-
-    public void setLadoDir(String ladoDir) {
-        this.ladoDir = ladoDir;
-    }
-
+    
+    // Método para converter a produção para formato de string
     @Override
     public String toString() {
-        return ladoEsq + " -> " + ladoDir;
+        return esquerda + " -> " + String.join(" | ", direita);
     }
 }
