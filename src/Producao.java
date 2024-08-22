@@ -1,4 +1,4 @@
-// Classe para representar uma produção
+// Classe para representar uma produção na GLC
 public class Producao {
     private String ladoEsq;
     private String ladoDir;
@@ -19,4 +19,10 @@ public class Producao {
     public void setLadoDir(String ladoDir) {
         this.ladoDir = ladoDir;
     }
+
+    @Override
+    public String toString() {
+        return ladoEsq + " -> " + ladoDir;
+    }
 }
+

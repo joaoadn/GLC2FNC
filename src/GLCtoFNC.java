@@ -1,38 +1,78 @@
-import java.io.*;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 
 public class GLCtoFNC {
 
-    // Método principal que faz a conversão de GLC para FNC
-    public static void convertGLCtoFNC(String inputFilePath, String outputFilePath) {
+    public static void main(String[] args) {
+        // Verifica se o número correto de argumentos foi passado
+        if (args.length != 3) {
+            System.out.println("Uso: java GLCtoFNC <inputFilePath> <variaveisFilePath> <outputFilePath>");
+            return;
+        }
+        // Converte a GLC para FNC usando os arquivos especificados
+        convertGLCtoFNC(args[0], args[1], args[2]);
+    }
+
+    public static void convertGLCtoFNC(String inputFilePath, String variaveisFilePath, String outputFilePath) {
+        // Estruturas de dados para armazenar as produções, variáveis e terminais
         ArrayList<Producao> producoes = new ArrayList<>();
-        ArrayList<Variavel> variaveis = new ArrayList<>();
-        ArrayList<Terminal> terminais = new ArrayList<>();
+        ArrayList<String> variaveis = new ArrayList<>();
+        ArrayList<String> terminais = new ArrayList<>();
+        Map<String, String> terminalToVar = new HashMap<>();
+        Map<String, String> varToNewVar = new HashMap<>();
 
         // Carrega a GLC do arquivo de entrada
         loadGLCFromFile(inputFilePath, producoes, variaveis, terminais);
-        // Remove produções vazias
+
+        // Remove produções vazias (lambda-produções)
         removeEmptyProductions(producoes);
+
         // Substitui terminais por variáveis
-        replaceTerminalsWithVariables(producoes, variaveis);
-        // Garante que cada produção tenha apenas duas variáveis
-        ensureTwoVariablesPerProduction(producoes, variaveis);
+        replaceTerminalsWithVariables(producoes, terminalToVar, variaveis);
+
+        // Garante que cada produção tenha no máximo duas variáveis no lado direito
+        ensureTwoVariablesPerProduction(producoes, varToNewVar, variaveis);
+
         // Salva a FNC no arquivo de saída
         saveFNCToFile(outputFilePath, producoes);
     }
 
-    // Remove produções vazias
+    // Remove produções vazias (lambda-produções)
     private static void removeEmptyProductions(ArrayList<Producao> producoes) {
-        producoes.removeIf(producao -> producao.getLadoDir().isEmpty());
+        for (int i = 0; i < producoes.size(); i++) {
+            Producao producao = producoes.get(i);
+            if (producao.getLadoDir().contains(".")) {
+                String variavel = producao.getLadoEsq();
+                producoes.remove(i);
+                i--;
+                for (Producao p : producoes) {
+                    if (p.getLadoDir().contains(variavel)) {
+                        p.setLadoDir(p.getLadoDir().replace(variavel, ""));
+                    }
+                }
+            }
+        }
     }
 
     // Substitui terminais por variáveis
-    private static void replaceTerminalsWithVariables(ArrayList<Producao> producoes, ArrayList<Variavel> variaveis) {
+    private static void replaceTerminalsWithVariables(ArrayList<Producao> producoes, Map<String, String> terminalToVar, ArrayList<String> variaveis) {
         for (Producao producao : producoes) {
             StringBuilder novoLadoDir = new StringBuilder();
             for (char simbolo : producao.getLadoDir().toCharArray()) {
                 if (Character.isLowerCase(simbolo)) {
-                    novoLadoDir.append(getOrCreateVariable(variaveis, simbolo));
+                    String terminal = String.valueOf(simbolo);
+                    if (!terminalToVar.containsKey(terminal)) {
+                        String novaVar = generateNewVariable(variaveis);
+                        terminalToVar.put(terminal, novaVar);
+                        variaveis.add(novaVar);
+                    }
+                    novoLadoDir.append(terminalToVar.get(terminal));
                 } else {
                     novoLadoDir.append(simbolo);
                 }
@@ -42,49 +82,49 @@ public class GLCtoFNC {
     }
 
     // Garante que cada produção tenha no máximo duas variáveis no lado direito
-    private static void ensureTwoVariablesPerProduction(ArrayList<Producao> producoes, ArrayList<Variavel> variaveis) {
+    private static void ensureTwoVariablesPerProduction(ArrayList<Producao> producoes, Map<String, String> varToNewVar, ArrayList<String> variaveis) {
         for (int i = 0; i < producoes.size(); i++) {
             Producao producao = producoes.get(i);
-            while (producao.getLadoDir().length() > 2) {
-                String novaVar = generateNewVariable(variaveis);
-                producoes.add(new Producao(novaVar, producao.getLadoDir().substring(0, 2)));
-                producao.setLadoDir(novaVar + producao.getLadoDir().substring(2));
+            String ladoDir = producao.getLadoDir();
+            while (ladoDir.length() > 2) {
+                String prefixo = ladoDir.substring(0, 2);
+                ladoDir = ladoDir.substring(2);
+
+                // Cria uma nova variável se ainda não existir para o prefixo
+                if (!varToNewVar.containsKey(prefixo)) {
+                    String novaVar = generateNewVariable(variaveis);
+                    varToNewVar.put(prefixo, novaVar);
+                    producoes.add(new Producao(novaVar, prefixo));
+                }
+                ladoDir = varToNewVar.get(prefixo) + ladoDir;
             }
+            producao.setLadoDir(ladoDir);
         }
     }
 
     // Carrega a GLC do arquivo
-    private static void loadGLCFromFile(String filePath, ArrayList<Producao> producoes, ArrayList<Variavel> variaveis, ArrayList<Terminal> terminais) {
-        File file = new File(filePath);
-        if (!file.exists()) {
-            System.out.println("Arquivo não encontrado: " + filePath);
-            return;
-        }
+    private static void loadGLCFromFile(String filePath, ArrayList<Producao> producoes, ArrayList<String> variaveis, ArrayList<String> terminais) {
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
             String linha;
             while ((linha = reader.readLine()) != null) {
+                linha = linha.trim();
+                if (linha.isEmpty()) continue;
+
+                // Divide a linha em parte esquerda e parte direita da produção
                 String[] partes = linha.split("->");
-                
-                // Verifica se a linha contém o delimitador "->"
-                if (partes.length != 2) {
-                    System.out.println("Formato inválido na linha: " + linha);
-                    continue;
-                }
-                
+                if (partes.length != 2) continue;
+
                 String ladoEsq = partes[0].trim();
-                String ladoDir = partes[1].trim();
-                
-                // Adiciona a produção e a variável se o lado esquerdo não estiver vazio
-                if (!ladoEsq.isEmpty() && !ladoDir.isEmpty()) {
-                    producoes.add(new Producao(ladoEsq, ladoDir));
-                    variaveis.add(new Variavel(ladoEsq));
-                    for (char simbolo : ladoDir.toCharArray()) {
-                        if (Character.isLowerCase(simbolo)) {
-                            terminais.add(new Terminal(String.valueOf(simbolo)));
-                        }
+                String[] regras = partes[1].trim().split("\\|");
+
+                // Adiciona a variável se ainda não estiver na lista
+                if (!variaveis.contains(ladoEsq)) variaveis.add(ladoEsq);
+
+                for (String regra : regras) {
+                    String regraTrimmed = regra.trim();
+                    if (!regraTrimmed.isEmpty()) {
+                        producoes.add(new Producao(ladoEsq, regraTrimmed));
                     }
-                } else {
-                    System.out.println("Linha vazia ou inválida encontrada: " + linha);
                 }
             }
         } catch (IOException e) {
@@ -104,32 +144,17 @@ public class GLCtoFNC {
         }
     }
 
-    // Gera uma nova variável
-    private static String generateNewVariable(ArrayList<Variavel> variaveis) {
-        char ultimaLetra = variaveis.isEmpty() ? 'A' : variaveis.get(variaveis.size() - 1).getLadoEsq().charAt(0);
-        String novaVariavel = String.valueOf((char) (ultimaLetra + 1));
-        variaveis.add(new Variavel(novaVariavel));
+    // Gera uma nova variável (T1, T2, etc.)
+    private static String generateNewVariable(ArrayList<String> variaveis) {
+        int index = 1;
+        String novaVariavel;
+        do {
+            novaVariavel = "T" + index++;
+        } while (variaveis.contains(novaVariavel));
         return novaVariavel;
-    }
-
-    // Retorna uma variável existente ou cria uma nova para um terminal
-    private static String getOrCreateVariable(ArrayList<Variavel> variaveis, char terminal) {
-        for (Variavel variavel : variaveis) {
-            if (variavel.getLadoEsq().equals(String.valueOf(terminal))) {
-                return variavel.getLadoEsq();
-            }
-        }
-        String novaVariavel = generateNewVariable(variaveis);
-        return novaVariavel;
-    }
-
-    // Ponto de entrada do programa
-    public static void main(String[] args) {
-        if (args.length != 2) {
-            System.out.println("Uso: java GLCtoFNC <inputFilePath> <outputFilePath>");
-            return;
-        }
-        convertGLCtoFNC(args[0], args[1]);
     }
 }
+
+
+
 
