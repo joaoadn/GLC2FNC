@@ -1,5 +1,5 @@
 // Classe para representar uma produção na GLC
-public class Producao {
+class Producao {
     private String ladoEsq;
     private String ladoDir;
 
@@ -25,4 +25,3 @@ public class Producao {
         return ladoEsq + " -> " + ladoDir;
     }
 }
-

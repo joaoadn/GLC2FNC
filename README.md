@@ -1,6 +1,6 @@
 ## COMPILANDO O PROGRAMA NO TERMINAL
 
-javac -d bin src/GLCtoFNC.java src/Producao.java src/Variavel.java src/Terminal.java
+javac -d bin src/GLCtoFNC.java src/Producao.java
 
 ## EXECUTANDO O PROGRAMA NO TERMINAL
 
