@@ -6,6 +6,6 @@ javac -d bin src/GLCtoFNC.java src/Producao.java src/Variavel.java src/Terminal.
 
 java -cp bin GLCtoFNC glc1.txt fnc.txt
 
-## TESTAR
+## TESTANDO
 
 Modificar o arquivo glc1_fnc.txt, colocando o conteúdo da GLC que deseja converter.
