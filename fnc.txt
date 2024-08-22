@@ -2,8 +2,8 @@ S -> aS
 S -> bS
 S -> c
 S -> .
-T1 -> bc
-S -> bc
+T1 -> ab
+T2 -> bc
 S -> .
 C -> c
 C -> .
