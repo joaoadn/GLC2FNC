@@ -153,7 +153,9 @@ public class GLCtoFNC {
     // Garante que todas as produções estejam na forma A -> BC ou A -> a
     private void garantirFormaFNC() {
         List<Producao> novasProducoes = new ArrayList<>();
-
+        Map<String, String> variaveisTemporariasLocal = new HashMap<>();
+        Set<String> variaveisAdicionais = new HashSet<>();
+        
         for (Producao p : producoes) {
             for (String direita : p.direita) {
                 if (direita.length() == 2) {
@@ -163,16 +165,19 @@ public class GLCtoFNC {
                     String restante = direita;
                     String novaVariavel = "T" + (contadorTemporario++);
                     variaveis.add(novaVariavel);
-
+                    variaveisAdicionais.add(novaVariavel);
+        
+                    // Adiciona a primeira produção com a nova variável
                     List<String> novaDireita = new ArrayList<>();
                     novaDireita.add(restante.substring(0, 2));
                     novasProducoes.add(new Producao(p.esquerda, novaDireita));
-
+        
                     while (restante.length() > 2) {
-                        novasProducoes.add(new Producao(novaVariavel, Collections.singletonList(restante.substring(0, 2))));
-                        restante = restante.substring(1);
                         novaVariavel = "T" + (contadorTemporario++);
                         variaveis.add(novaVariavel);
+                        variaveisAdicionais.add(novaVariavel);
+                        novasProducoes.add(new Producao(novaVariavel, Collections.singletonList(restante.substring(0, 2))));
+                        restante = restante.substring(1);
                     }
                     novasProducoes.add(new Producao(novaVariavel, Collections.singletonList(restante)));
                 } else {
@@ -180,10 +185,16 @@ public class GLCtoFNC {
                 }
             }
         }
-
-        producoes = novasProducoes;
+        
+        // Substitui produções originais pelas novas
+        producoes.clear();
+        producoes.addAll(novasProducoes);
+    
+        // Atualiza o conjunto de variáveis
+        variaveis.addAll(variaveisAdicionais);
     }
-
+    
+    
     // Salva a gramática convertida em FNC no arquivo de saída
     private void salvarArquivo(String arquivo) throws IOException {
         BufferedWriter bw = new BufferedWriter(new FileWriter(arquivo));
@@ -194,6 +205,7 @@ public class GLCtoFNC {
         bw.close();
     }
 }
+
 
 
 
