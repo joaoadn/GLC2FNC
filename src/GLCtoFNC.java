@@ -5,7 +5,6 @@ public class GLCtoFNC {
     private Set<String> variaveis = new HashSet<>(); // Conjunto de variáveis (não terminais)
     private Set<String> terminais = new HashSet<>(); // Conjunto de terminais
     private List<Producao> producoes = new ArrayList<>(); // Lista de produções
-    private Map<String, String> variaveisTemporarias = new HashMap<>(); // Mapa para variáveis temporárias
     private String variavelInicial = "S"; // Variável inicial da gramática
     private int contadorTemporario = 1; // Contador para gerar variáveis temporárias
 
@@ -153,14 +152,13 @@ public class GLCtoFNC {
     // Garante que todas as produções estejam na forma A -> BC ou A -> a
     private void garantirFormaFNC() {
         List<Producao> novasProducoes = new ArrayList<>();
-        Map<String, String> variaveisTemporariasLocal = new HashMap<>();
         Set<String> variaveisAdicionais = new HashSet<>();
         
         for (Producao p : producoes) {
             for (String direita : p.direita) {
-                if (direita.length() == 2) {
+                if (direita.length() == 1 && terminais.contains(direita)) {
                     novasProducoes.add(new Producao(p.esquerda, Collections.singletonList(direita)));
-                } else if (direita.length() > 2) {
+                } else if (direita.length() == 2 && !direita.matches("[A-Z]{2}")) {
                     // Substitui produções de comprimento maior que 2 por variáveis temporárias
                     String restante = direita;
                     String novaVariavel = "T" + (contadorTemporario++);
