@@ -1,5 +1,0 @@
-S' -> BS | A | AS | B | ABC | C | .
-S -> BS | A | AS | B | ABC | C
-A -> a
-B -> b
-C -> c
