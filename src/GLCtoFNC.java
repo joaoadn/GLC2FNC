@@ -303,7 +303,8 @@ public class GLCtoFNC {
         List<String> terminalRules = new ArrayList<>();
         List<String> updatedRules = new ArrayList<>();
         Set<String> terminalsToReplace = new HashSet<>();
-
+    
+        // Primeiro, identificar quais terminais devem ser substituídos
         for (String rule : rules) {
             if (rule.contains(" -> ")) {
                 String[] parts = rule.split(" -> ");
@@ -320,7 +321,8 @@ public class GLCtoFNC {
                 }
             }
         }
-
+    
+        // Criar variáveis para terminais e adicionar suas regras
         for (char c = 'a'; c <= 'z'; c++) {
             String terminal = String.valueOf(c);
             if (terminalsToReplace.contains(terminal)) {
@@ -332,7 +334,8 @@ public class GLCtoFNC {
                 }
             }
         }
-
+    
+        // Atualizar regras substituindo terminais por variáveis
         for (String rule : rules) {
             if (rule.contains(" -> ")) {
                 String[] parts = rule.split(" -> ");
@@ -341,13 +344,19 @@ public class GLCtoFNC {
                 Set<String> updatedProds = new HashSet<>();
                 for (String prod : prods) {
                     String trimmedProd = prod.trim();
-                    StringBuilder newProd = new StringBuilder();
-                    for (char c : trimmedProd.toCharArray()) {
-                        String charStr = String.valueOf(c);
-                        newProd.append(Character.isLowerCase(c) && terminalToVariable.containsKey(charStr) ? terminalToVariable.get(charStr) : charStr);
-                    }
-                    if (newProd.length() > 0) {
-                        updatedProds.add(newProd.toString());
+                    if (trimmedProd.length() == 1 && Character.isLowerCase(trimmedProd.charAt(0))) {
+                        // Se a produção é um terminal de tamanho 1, mantê-lo inalterado
+                        updatedProds.add(trimmedProd);
+                    } else {
+                        // Substituir terminais maiores por variáveis
+                        StringBuilder newProd = new StringBuilder();
+                        for (char c : trimmedProd.toCharArray()) {
+                            String charStr = String.valueOf(c);
+                            newProd.append(Character.isLowerCase(c) && terminalToVariable.containsKey(charStr) ? terminalToVariable.get(charStr) : charStr);
+                        }
+                        if (newProd.length() > 0) {
+                            updatedProds.add(newProd.toString());
+                        }
                     }
                 }
                 updatedRules.add(variable + " -> " + String.join(" | ", updatedProds));
@@ -355,10 +364,11 @@ public class GLCtoFNC {
                 updatedRules.add(rule);
             }
         }
-
+    
         updatedRules.addAll(terminalRules);
         return updatedRules;
     }
+    
 }
 
 
