@@ -1,1 +1,1 @@
-S -> aS | . | ABC | BC
+S -> aS | .  
