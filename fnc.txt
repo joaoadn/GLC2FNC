@@ -1,3 +1,6 @@
 S -> aS
-A -> a
+S -> T1
+S -> BC
 S' -> S
+T1 -> A
+T1 -> BC
