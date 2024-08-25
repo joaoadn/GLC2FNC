@@ -49,8 +49,10 @@ public class GLCtoFNC {
         rules = removeChainRules(rules);
         rules = removeNonGeneratingRules(rules);
         rules = removeUnreachableSymbols(rules);
-        return replaceTerminalsWithVariables(rules);
+        rules = replaceTerminalsWithVariables(rules);
+        return rules;
     }
+    
 
     private static List<String> removeInitialRecursion(List<String> rules) {
         List<String> newRules = new ArrayList<>();
@@ -368,8 +370,84 @@ public class GLCtoFNC {
         updatedRules.addAll(terminalRules);
         return updatedRules;
     }
+
+    private static List<String> convertToBinaryRules(List<String> rules) {
+        Map<String, String> variableMap = new HashMap<>();
+        List<String> updatedRules = new ArrayList<>();
+        List<String> additionalRules = new ArrayList<>();
+        int variableCounter = 1;
+
+        // Passo 1: Adicionar regras originais e identificar variáveis auxiliares
+        for (String rule : rules) {
+            if (rule.contains(" -> ")) {
+                String[] parts = rule.split(" -> ");
+                String variable = parts[0].trim();
+                String[] prods = parts[1].split("\\|");
+
+                for (String prod : prods) {
+                    prod = prod.trim();
+                    if (prod.length() > 2) {
+                        // Criar variáveis auxiliares para regras de comprimento maior
+                        String newVariable = "T" + variableCounter++;
+                        variableMap.put(newVariable, prod);
+                        additionalRules.add(newVariable + " -> " + prod.substring(0, 2));
+                        for (int i = 2; i < prod.length(); i++) {
+                            newVariable = "T" + variableCounter++;
+                            additionalRules.add(newVariable + " -> " + prod.substring(i, i + 2));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Passo 2: Atualizar regras para usar variáveis auxiliares
+        Map<String, String> terminalToVariable = new HashMap<>();
+        for (String rule : rules) {
+            if (rule.contains(" -> ")) {
+                String[] parts = rule.split(" -> ");
+                String variable = parts[0].trim();
+                String[] prods = parts[1].split("\\|");
+                Set<String> updatedProds = new HashSet<>();
+
+                for (String prod : prods) {
+                    String trimmedProd = prod.trim();
+                    if (trimmedProd.length() == 1 && Character.isLowerCase(trimmedProd.charAt(0))) {
+                        // Se a produção é um terminal de tamanho 1, mantê-lo inalterado
+                        updatedProds.add(trimmedProd);
+                    } else {
+                        // Substituir terminais maiores por variáveis
+                        StringBuilder newProd = new StringBuilder();
+                        String[] tokens = trimmedProd.split("(?<=\\G..)");
+                        for (String token : tokens) {
+                            String newVar = variableMap.get(token);
+                            if (newVar != null) {
+                                newProd.append(newVar).append(" ");
+                            } else {
+                                newProd.append(token).append(" ");
+                            }
+                        }
+                        if (newProd.length() > 0) {
+                            updatedProds.add(newProd.toString().trim());
+                        }
+                    }
+                }
+                updatedRules.add(variable + " -> " + String.join(" | ", updatedProds));
+            } else {
+                updatedRules.add(rule);
+            }
+        }
+
+        // Adicionar regras auxiliares
+        updatedRules.addAll(additionalRules);
+
+        // Remover possíveis regras redundantes ou duplicadas
+        Set<String> uniqueRules = new HashSet<>(updatedRules);
+        return new ArrayList<>(uniqueRules);
+    }
     
 }
+    
+
 
 
 
