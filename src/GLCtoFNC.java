@@ -1,15 +1,14 @@
 import java.io.*;
 import java.util.*;
-public class GLCtoFNC {
 
-    private Set<String> variaveis = new HashSet<>(); // Conjunto de variáveis (não terminais)
-    private Set<String> terminais = new HashSet<>(); // Conjunto de terminais
-    private List<Producao> producoes = new ArrayList<>(); // Lista de produções
-    private String variavelInicial = "S"; // Variável inicial da gramática
-    private int contadorTemporario = 1; // Contador para gerar variáveis temporárias
+public class GLCtoFNC {
+    private Set<String> variaveis = new LinkedHashSet<>();
+    private Set<String> terminais = new LinkedHashSet<>();
+    private Map<String, List<String>> producoes = new LinkedHashMap<>();
+    private String variavelInicial = "S";
+    private int contadorTemporario = 1;
 
     public static void main(String[] args) {
-        // Verifica se o número correto de argumentos foi fornecido
         if (args.length != 2) {
             System.out.println("Uso: java GLCtoFNC <entrada> <saida>");
             System.exit(1);
@@ -20,189 +19,259 @@ public class GLCtoFNC {
 
         try {
             GLCtoFNC conversor = new GLCtoFNC();
-            conversor.lerArquivo(arquivoEntrada); // Lê a gramática do arquivo de entrada
-            conversor.adicionarVariavelInicial(); // Adiciona uma variável inicial, se necessário
-            conversor.eliminarProducoesNaoNormais(); // Elimina produções não normais
-            conversor.converterParaFNC(); // Converte a gramática para FNC
-            conversor.salvarArquivo(arquivoSaida); // Salva a gramática na forma normal de Chomsky no arquivo de saída
+            conversor.lerArquivo(arquivoEntrada);
+            conversor.adicionarVariavelInicial();
+            conversor.adicionarTerminaisVariaveis();
+            conversor.eliminarProducoesEpsilon();
+            conversor.eliminarProducoesUnitarias();
+            conversor.converterParaFNC();
+            conversor.salvarArquivo(arquivoSaida);
         } catch (IOException e) {
             System.err.println("Erro ao processar arquivos: " + e.getMessage());
         }
     }
 
-    // Lê o arquivo de entrada e armazena as produções
     private void lerArquivo(String arquivo) throws IOException {
         BufferedReader br = new BufferedReader(new FileReader(arquivo));
         String linha;
 
         while ((linha = br.readLine()) != null) {
             linha = linha.trim();
-            if (linha.isEmpty() || linha.startsWith("#")) continue; // Ignora linhas vazias e comentários
+            if (linha.isEmpty() || linha.startsWith("#")) continue;
 
             String[] partes = linha.split("->");
-            if (partes.length != 2) continue; // Ignora linhas mal formatadas
+            if (partes.length != 2) continue;
 
             String esquerda = partes[0].trim();
             String[] direitos = partes[1].split("\\|");
             List<String> listaDireita = new ArrayList<>();
             for (String direito : direitos) {
-                listaDireita.add(direito.trim());
-                // Identifica terminais e variáveis
-                for (char c : direito.trim().toCharArray()) {
-                    if (Character.isLowerCase(c)) {
-                        terminais.add(String.valueOf(c));
-                    } else if (Character.isUpperCase(c)) {
-                        variaveis.add(String.valueOf(c));
+                String regra = direito.trim();
+                if (regra.equals(".")) {
+                    listaDireita.add(".");
+                } else {
+                    listaDireita.add(regra);
+                    for (char c : regra.toCharArray()) {
+                        if (Character.isLowerCase(c)) {
+                            terminais.add(String.valueOf(c));
+                        } else if (Character.isUpperCase(c)) {
+                            variaveis.add(String.valueOf(c));
+                        }
                     }
                 }
             }
-            producoes.add(new Producao(esquerda, listaDireita));
+            producoes.put(esquerda, listaDireita);
         }
         br.close();
     }
 
-    // Adiciona uma nova variável inicial, se necessário
     private void adicionarVariavelInicial() {
-        if (variaveis.contains("S")) return; // Se já existe uma variável inicial, nada a fazer
+        if (variaveis.contains("S")) return;
 
         String novaVariavelInicial = "S'";
         variaveis.add(novaVariavelInicial);
 
-        // Adiciona uma produção inicial que gera a variável inicial original
         List<String> novasProducoes = new ArrayList<>();
-        novasProducoes.add(novaVariavelInicial);
         novasProducoes.add(variavelInicial);
-
-        producoes.add(0, new Producao(novaVariavelInicial, Collections.singletonList(variavelInicial)));
+        producoes.put(novaVariavelInicial, novasProducoes);
     }
 
-    // Elimina produções não normais da gramática
-    private void eliminarProducoesNaoNormais() {
-        eliminarProducoesUnitarias(); // Remove produções unitárias
-        eliminarProducoesComComprimentoMaiorQue2(); // Remove produções com comprimento maior que 2
+    private void adicionarTerminaisVariaveis() {
+        Map<String, String> substituicoesTemporarias = new LinkedHashMap<>();
+        for (String terminal : terminais) {
+            String variavelTemp = terminal.toUpperCase();
+            if (!variaveis.contains(variavelTemp)) {
+                variaveis.add(variavelTemp);
+                substituicoesTemporarias.put(terminal, variavelTemp);
+                producoes.put(variavelTemp, Collections.singletonList(terminal));
+            }
+        }
     }
 
-    // Elimina produções unitárias (A -> B)
-    private void eliminarProducoesUnitarias() {
-        boolean alterado;
-        do {
-            alterado = false;
-            Map<String, List<String>> novasProducoes = new HashMap<>();
+    private void eliminarProducoesEpsilon() {
+        Set<String> variaveisComEpsilon = new HashSet<>();
+        for (Map.Entry<String, List<String>> entry : producoes.entrySet()) {
+            String esquerda = entry.getKey();
+            for (String direita : entry.getValue()) {
+                if (direita.equals(".")) {
+                    variaveisComEpsilon.add(esquerda);
+                }
+            }
+        }
 
-            for (Producao p : producoes) {
-                List<String> novasDireitas = new ArrayList<>();
-                for (String direita : p.direita) {
-                    if (direita.length() == 1 && variaveis.contains(direita)) {
-                        // Substitui produções unitárias pelas produções da variável referenciada
-                        for (Producao p2 : producoes) {
-                            if (p2.esquerda.equals(direita)) {
-                                novasDireitas.addAll(p2.direita);
-                                alterado = true;
+        if (variaveisComEpsilon.isEmpty()) return;
+
+        Map<String, List<String>> novasProducoes = new LinkedHashMap<>();
+        for (Map.Entry<String, List<String>> entry : producoes.entrySet()) {
+            String esquerda = entry.getKey();
+            List<String> novasDireitas = new ArrayList<>();
+            for (String direita : entry.getValue()) {
+                if (!direita.equals(".")) {
+                    novasDireitas.add(direita);
+                    for (int i = 0; i < direita.length(); i++) {
+                        if (variaveisComEpsilon.contains(String.valueOf(direita.charAt(i)))) {
+                            String novaDireita = direita.substring(0, i) + direita.substring(i + 1);
+                            if (!novasDireitas.contains(novaDireita) && !novaDireita.equals("")) {
+                                novasDireitas.add(novaDireita);
                             }
                         }
-                    } else {
-                        novasDireitas.add(direita);
                     }
                 }
-                if (novasDireitas.size() > 0) {
-                    novasProducoes.put(p.esquerda, novasDireitas);
-                }
             }
-
-            producoes.clear();
-            for (Map.Entry<String, List<String>> entry : novasProducoes.entrySet()) {
-                producoes.add(new Producao(entry.getKey(), entry.getValue()));
-            }
-        } while (alterado);
-    }
-
-    // Elimina produções com comprimento maior que 2
-    private void eliminarProducoesComComprimentoMaiorQue2() {
-        List<Producao> novasProducoes = new ArrayList<>();
-
-        for (Producao p : producoes) {
-            for (String direita : p.direita) {
-                if (direita.length() > 2) {
-                    // Quebra produções de comprimento maior que 2 usando variáveis temporárias
-                    String restante = direita;
-                    String novaVariavel = "T" + (contadorTemporario++);
-                    variaveis.add(novaVariavel);
-
-                    while (restante.length() > 2) {
-                        novasProducoes.add(new Producao(novaVariavel, Collections.singletonList(restante.substring(0, 2))));
-                        restante = restante.substring(1);
-                        novaVariavel = "T" + (contadorTemporario++);
-                        variaveis.add(novaVariavel);
-                    }
-                    novasProducoes.add(new Producao(novaVariavel, Collections.singletonList(restante)));
-                } else {
-                    novasProducoes.add(new Producao(p.esquerda, Collections.singletonList(direita)));
-                }
+            if (!novasDireitas.isEmpty() || (esquerda.equals(variavelInicial) && variaveisComEpsilon.contains(esquerda))) {
+                novasProducoes.put(esquerda, novasDireitas);
             }
         }
 
         producoes = novasProducoes;
     }
 
-    // Converte a gramática para a forma normal de Chomsky (FNC)
-    private void converterParaFNC() {
-        garantirFormaFNC();
+    private void eliminarProducoesUnitarias() {
+        boolean alterado;
+        do {
+            alterado = false;
+            Map<String, List<String>> novasProducoes = new LinkedHashMap<>();
+
+            for (Map.Entry<String, List<String>> entry : producoes.entrySet()) {
+                String esquerda = entry.getKey();
+                List<String> novasDireitas = new ArrayList<>();
+                for (String direita : entry.getValue()) {
+                    if (direita.length() == 1 && variaveis.contains(direita)) {
+                        List<String> substituicoes = producoes.get(direita);
+                        if (substituicoes != null) {
+                            for (String substituicao : substituicoes) {
+                                if (!novasDireitas.contains(substituicao)) {
+                                    novasDireitas.add(substituicao);
+                                    alterado = true;
+                                }
+                            }
+                        }
+                    } else {
+                        if (!novasDireitas.contains(direita)) {
+                            novasDireitas.add(direita);
+                        }
+                    }
+                }
+                if (!novasDireitas.isEmpty()) {
+                    novasProducoes.put(esquerda, novasDireitas);
+                }
+            }
+            producoes.clear();
+            producoes.putAll(novasProducoes);
+        } while (alterado);
     }
 
-    // Garante que todas as produções estejam na forma A -> BC ou A -> a
-    private void garantirFormaFNC() {
-        List<Producao> novasProducoes = new ArrayList<>();
-        Set<String> variaveisAdicionais = new HashSet<>();
-        
-        for (Producao p : producoes) {
-            for (String direita : p.direita) {
+    private void converterParaFNC() {
+        Map<String, List<String>> novasProducoes = new LinkedHashMap<>();
+        Map<String, String> substituicoesTemporarias = new LinkedHashMap<>();
+
+        // Adiciona a produção para a nova variável inicial
+        List<String> producoesSPrime = new ArrayList<>();
+        producoesSPrime.add(variavelInicial);
+        producoes.put("S'", producoesSPrime);
+
+        for (Map.Entry<String, List<String>> entry : producoes.entrySet()) {
+            String esquerda = entry.getKey();
+            for (String direita : entry.getValue()) {
                 if (direita.length() == 1 && terminais.contains(direita)) {
-                    novasProducoes.add(new Producao(p.esquerda, Collections.singletonList(direita)));
-                } else if (direita.length() == 2 && !direita.matches("[A-Z]{2}")) {
-                    // Substitui produções de comprimento maior que 2 por variáveis temporárias
-                    String restante = direita;
-                    String novaVariavel = "T" + (contadorTemporario++);
-                    variaveis.add(novaVariavel);
-                    variaveisAdicionais.add(novaVariavel);
-        
-                    // Adiciona a primeira produção com a nova variável
-                    List<String> novaDireita = new ArrayList<>();
-                    novaDireita.add(restante.substring(0, 2));
-                    novasProducoes.add(new Producao(p.esquerda, novaDireita));
-        
-                    while (restante.length() > 2) {
-                        novaVariavel = "T" + (contadorTemporario++);
-                        variaveis.add(novaVariavel);
-                        variaveisAdicionais.add(novaVariavel);
-                        novasProducoes.add(new Producao(novaVariavel, Collections.singletonList(restante.substring(0, 2))));
-                        restante = restante.substring(1);
+                    // Mapeia o terminal para uma variável correspondente
+                    String variavelTemp = substituicoesTemporarias.get(direita);
+                    if (variavelTemp != null) {
+                        List<String> novaDireita = Collections.singletonList(direita);
+                        if (!novasProducoes.containsKey(variavelTemp)) {
+                            novasProducoes.put(variavelTemp, novaDireita);
+                        }
+                        List<String> producaoExistente = novasProducoes.get(esquerda);
+                        if (producaoExistente == null) {
+                            producaoExistente = new ArrayList<>();
+                            novasProducoes.put(esquerda, producaoExistente);
+                        }
+                        if (!producaoExistente.contains(variavelTemp)) {
+                            producaoExistente.add(variavelTemp);
+                        }
                     }
-                    novasProducoes.add(new Producao(novaVariavel, Collections.singletonList(restante)));
+                } else if (direita.length() > 2) {
+                    // Divide a produção longa em produções binárias
+                    String novaVariavel = "T" + contadorTemporario++;
+                    List<String> novaDireita = new ArrayList<>();
+                    novaDireita.add(direita.substring(0, 1));
+                    novaDireita.add(direita.substring(1));
+                    novasProducoes.put(novaVariavel, novaDireita);
+                    List<String> producaoExistente = novasProducoes.get(esquerda);
+                    if (producaoExistente == null) {
+                        producaoExistente = new ArrayList<>();
+                        novasProducoes.put(esquerda, producaoExistente);
+                    }
+                    if (!producaoExistente.contains(novaVariavel)) {
+                        producaoExistente.add(novaVariavel);
+                    }
                 } else {
-                    novasProducoes.add(new Producao(p.esquerda, Collections.singletonList(direita)));
+                    List<String> producaoExistente = novasProducoes.get(esquerda);
+                    if (producaoExistente == null) {
+                        producaoExistente = new ArrayList<>();
+                        novasProducoes.put(esquerda, producaoExistente);
+                    }
+                    if (!producaoExistente.contains(direita)) {
+                        producaoExistente.add(direita);
+                    }
                 }
             }
         }
-        
-        // Substitui produções originais pelas novas
-        producoes.clear();
-        producoes.addAll(novasProducoes);
-    
-        // Atualiza o conjunto de variáveis
-        variaveis.addAll(variaveisAdicionais);
+
+        // Atualiza as produções com as variáveis temporárias
+        producoes.putAll(novasProducoes);
     }
-    
-    
-    // Salva a gramática convertida em FNC no arquivo de saída
+
     private void salvarArquivo(String arquivo) throws IOException {
         BufferedWriter bw = new BufferedWriter(new FileWriter(arquivo));
-        for (Producao producao : producoes) {
-            bw.write(producao.toString());
-            bw.newLine();
+        for (Map.Entry<String, List<String>> entry : producoes.entrySet()) {
+            String esquerda = entry.getKey();
+            for (String direita : entry.getValue()) {
+                bw.write(esquerda + " -> " + direita);
+                bw.newLine();
+            }
         }
         bw.close();
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
