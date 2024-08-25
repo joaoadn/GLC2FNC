@@ -2,238 +2,443 @@ import java.io.*;
 import java.util.*;
 
 public class GLCtoFNC {
-    private Set<String> variaveis = new LinkedHashSet<>();
-    private Set<String> terminais = new LinkedHashSet<>();
-    private Map<String, List<String>> producoes = new LinkedHashMap<>();
-    private String variavelInicial = "S";
-    private int contadorTemporario = 1;
+
+    private static final String START_SYMBOL = "S'";
 
     public static void main(String[] args) {
         if (args.length != 2) {
-            System.out.println("Uso: java GLCtoFNC <entrada> <saida>");
-            System.exit(1);
+            System.out.println("Uso: java GLCtoFNC <inputFile> <outputFile>");
+            return;
         }
 
-        String arquivoEntrada = args[0];
-        String arquivoSaida = args[1];
+        String inputFile = args[0];
+        String outputFile = args[1];
 
         try {
-            GLCtoFNC conversor = new GLCtoFNC();
-            conversor.lerArquivo(arquivoEntrada);
-            conversor.adicionarVariavelInicial();
-            conversor.adicionarTerminaisVariaveis();
-            conversor.eliminarProducoesEpsilon();
-            conversor.eliminarProducoesUnitarias();
-            conversor.converterParaFNC();
-            conversor.salvarArquivo(arquivoSaida);
+            List<String> rules = readGrammar(inputFile);
+            rules = removeInitialRecursion(rules);
+            rules = removeLambdaRules(rules);
+            rules = removeChainRules(rules);
+            rules = removeNonGeneratingRules(rules);
+            rules = removeUnreachableSymbols(rules);
+            rules = replaceTerminalsWithVariables(rules);
+
+            writeGrammar(outputFile, rules);
         } catch (IOException e) {
             System.err.println("Erro ao processar arquivos: " + e.getMessage());
         }
     }
 
-    private void lerArquivo(String arquivo) throws IOException {
-        BufferedReader br = new BufferedReader(new FileReader(arquivo));
-        String linha;
-
-        while ((linha = br.readLine()) != null) {
-            linha = linha.trim();
-            if (linha.isEmpty() || linha.startsWith("#")) continue;
-
-            String[] partes = linha.split("->");
-            if (partes.length != 2) continue;
-
-            String esquerda = partes[0].trim();
-            String[] direitos = partes[1].split("\\|");
-            List<String> listaDireita = new ArrayList<>();
-            for (String direito : direitos) {
-                String regra = direito.trim();
-                if (regra.equals(".")) {
-                    listaDireita.add(".");
-                } else {
-                    listaDireita.add(regra);
-                    for (char c : regra.toCharArray()) {
-                        if (Character.isLowerCase(c)) {
-                            terminais.add(String.valueOf(c));
-                        } else if (Character.isUpperCase(c)) {
-                            variaveis.add(String.valueOf(c));
-                        }
-                    }
-                }
-            }
-            producoes.put(esquerda, listaDireita);
-        }
-        br.close();
-    }
-
-    private void adicionarVariavelInicial() {
-        if (variaveis.contains("S")) return;
-
-        String novaVariavelInicial = "S'";
-        variaveis.add(novaVariavelInicial);
-
-        List<String> novasProducoes = new ArrayList<>();
-        novasProducoes.add(variavelInicial);
-        producoes.put(novaVariavelInicial, novasProducoes);
-    }
-
-    private void adicionarTerminaisVariaveis() {
-        Map<String, String> substituicoesTemporarias = new LinkedHashMap<>();
-        for (String terminal : terminais) {
-            String variavelTemp = terminal.toUpperCase();
-            if (!variaveis.contains(variavelTemp)) {
-                variaveis.add(variavelTemp);
-                substituicoesTemporarias.put(terminal, variavelTemp);
-                producoes.put(variavelTemp, Collections.singletonList(terminal));
+    private static List<String> readGrammar(String inputFile) throws IOException {
+        List<String> rules = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(inputFile))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                rules.add(line.trim());
             }
         }
+        return rules;
     }
 
-    private void eliminarProducoesEpsilon() {
-        Set<String> variaveisComEpsilon = new HashSet<>();
-        for (Map.Entry<String, List<String>> entry : producoes.entrySet()) {
-            String esquerda = entry.getKey();
-            for (String direita : entry.getValue()) {
-                if (direita.equals(".")) {
-                    variaveisComEpsilon.add(esquerda);
-                }
-            }
-        }
-
-        if (variaveisComEpsilon.isEmpty()) return;
-
-        Map<String, List<String>> novasProducoes = new LinkedHashMap<>();
-        for (Map.Entry<String, List<String>> entry : producoes.entrySet()) {
-            String esquerda = entry.getKey();
-            List<String> novasDireitas = new ArrayList<>();
-            for (String direita : entry.getValue()) {
-                if (!direita.equals(".")) {
-                    novasDireitas.add(direita);
-                    for (int i = 0; i < direita.length(); i++) {
-                        if (variaveisComEpsilon.contains(String.valueOf(direita.charAt(i)))) {
-                            String novaDireita = direita.substring(0, i) + direita.substring(i + 1);
-                            if (!novasDireitas.contains(novaDireita) && !novaDireita.equals("")) {
-                                novasDireitas.add(novaDireita);
-                            }
-                        }
-                    }
-                }
-            }
-            if (!novasDireitas.isEmpty() || (esquerda.equals(variavelInicial) && variaveisComEpsilon.contains(esquerda))) {
-                novasProducoes.put(esquerda, novasDireitas);
-            }
-        }
-
-        producoes = novasProducoes;
-    }
-
-    private void eliminarProducoesUnitarias() {
-        boolean alterado;
-        do {
-            alterado = false;
-            Map<String, List<String>> novasProducoes = new LinkedHashMap<>();
-
-            for (Map.Entry<String, List<String>> entry : producoes.entrySet()) {
-                String esquerda = entry.getKey();
-                List<String> novasDireitas = new ArrayList<>();
-                for (String direita : entry.getValue()) {
-                    if (direita.length() == 1 && variaveis.contains(direita)) {
-                        List<String> substituicoes = producoes.get(direita);
-                        if (substituicoes != null) {
-                            for (String substituicao : substituicoes) {
-                                if (!novasDireitas.contains(substituicao)) {
-                                    novasDireitas.add(substituicao);
-                                    alterado = true;
-                                }
-                            }
-                        }
-                    } else {
-                        if (!novasDireitas.contains(direita)) {
-                            novasDireitas.add(direita);
-                        }
-                    }
-                }
-                if (!novasDireitas.isEmpty()) {
-                    novasProducoes.put(esquerda, novasDireitas);
-                }
-            }
-            producoes.clear();
-            producoes.putAll(novasProducoes);
-        } while (alterado);
-    }
-
-    private void converterParaFNC() {
-        Map<String, List<String>> novasProducoes = new LinkedHashMap<>();
-        Map<String, String> substituicoesTemporarias = new LinkedHashMap<>();
-
-        // Adiciona a produção para a nova variável inicial
-        List<String> producoesSPrime = new ArrayList<>();
-        producoesSPrime.add(variavelInicial);
-        producoes.put("S'", producoesSPrime);
-
-        for (Map.Entry<String, List<String>> entry : producoes.entrySet()) {
-            String esquerda = entry.getKey();
-            for (String direita : entry.getValue()) {
-                if (direita.length() == 1 && terminais.contains(direita)) {
-                    // Mapeia o terminal para uma variável correspondente
-                    String variavelTemp = substituicoesTemporarias.get(direita);
-                    if (variavelTemp != null) {
-                        List<String> novaDireita = Collections.singletonList(direita);
-                        if (!novasProducoes.containsKey(variavelTemp)) {
-                            novasProducoes.put(variavelTemp, novaDireita);
-                        }
-                        List<String> producaoExistente = novasProducoes.get(esquerda);
-                        if (producaoExistente == null) {
-                            producaoExistente = new ArrayList<>();
-                            novasProducoes.put(esquerda, producaoExistente);
-                        }
-                        if (!producaoExistente.contains(variavelTemp)) {
-                            producaoExistente.add(variavelTemp);
-                        }
-                    }
-                } else if (direita.length() > 2) {
-                    // Divide a produção longa em produções binárias
-                    String novaVariavel = "T" + contadorTemporario++;
-                    List<String> novaDireita = new ArrayList<>();
-                    novaDireita.add(direita.substring(0, 1));
-                    novaDireita.add(direita.substring(1));
-                    novasProducoes.put(novaVariavel, novaDireita);
-                    List<String> producaoExistente = novasProducoes.get(esquerda);
-                    if (producaoExistente == null) {
-                        producaoExistente = new ArrayList<>();
-                        novasProducoes.put(esquerda, producaoExistente);
-                    }
-                    if (!producaoExistente.contains(novaVariavel)) {
-                        producaoExistente.add(novaVariavel);
-                    }
-                } else {
-                    List<String> producaoExistente = novasProducoes.get(esquerda);
-                    if (producaoExistente == null) {
-                        producaoExistente = new ArrayList<>();
-                        novasProducoes.put(esquerda, producaoExistente);
-                    }
-                    if (!producaoExistente.contains(direita)) {
-                        producaoExistente.add(direita);
-                    }
-                }
-            }
-        }
-
-        // Atualiza as produções com as variáveis temporárias
-        producoes.putAll(novasProducoes);
-    }
-
-    private void salvarArquivo(String arquivo) throws IOException {
-        BufferedWriter bw = new BufferedWriter(new FileWriter(arquivo));
-        for (Map.Entry<String, List<String>> entry : producoes.entrySet()) {
-            String esquerda = entry.getKey();
-            for (String direita : entry.getValue()) {
-                bw.write(esquerda + " -> " + direita);
+    private static void writeGrammar(String outputFile, List<String> rules) throws IOException {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(outputFile))) {
+            for (String rule : rules) {
+                bw.write(rule);
                 bw.newLine();
             }
         }
-        bw.close();
     }
+
+    private static List<String> removeInitialRecursion(List<String> rules) {
+        List<String> newRules = new ArrayList<>();
+        Set<String> variables = new HashSet<>();
+
+        for (String rule : rules) {
+            if (rule.startsWith("S ->")) {
+                String newStartSymbol = "S'";
+                newRules.add(newStartSymbol + " -> S");
+
+                String[] productions = rule.substring(4).split("\\|");
+                List<String> updatedProductions = new ArrayList<>();
+
+                for (String production : productions) {
+                    production = production.trim();
+                    if (!production.isEmpty() && !production.equals("S")) {
+                        updatedProductions.add(production);
+                    }
+                }
+
+                newRules.add("S -> " + String.join(" | ", updatedProductions));
+                variables.add(newStartSymbol);
+            } else {
+                newRules.add(rule);
+            }
+        }
+
+        return newRules;
+    }
+
+    private static List<String> removeLambdaRules(List<String> rules) {
+        Set<String> nullableVariables = identifyNullableVariables(rules);
+        List<String> newRules = new ArrayList<>();
+        Map<String, Set<String>> productions = new HashMap<>();
+        boolean hasLambdaProductionForStartSymbol = false;
+
+        for (String rule : rules) {
+            if (rule.contains(" -> ")) {
+                String[] parts = rule.split(" -> ");
+                String variable = parts[0].trim();
+                String[] prods = parts[1].split("\\|");
+                Set<String> prodSet = productions.computeIfAbsent(variable, k -> new HashSet<>());
+
+                for (String prod : prods) {
+                    prod = prod.trim();
+                    if (!prod.equals(".")) {
+                        prodSet.add(prod);
+                    } else if (variable.equals("S")) {
+                        hasLambdaProductionForStartSymbol = true;
+                    }
+                }
+            }
+        }
+
+        for (Map.Entry<String, Set<String>> entry : productions.entrySet()) {
+            String variable = entry.getKey();
+            Set<String> prodSet = entry.getValue();
+            Set<String> newProductions = new HashSet<>(prodSet);
+
+            for (String prod : prodSet) {
+                generateCombinations(newProductions, prod, nullableVariables);
+            }
+
+            newProductions.removeIf(String::isEmpty);
+            newRules.add(variable + " -> " + String.join(" | ", newProductions));
+        }
+
+        if (nullableVariables.contains("S") || hasLambdaProductionForStartSymbol) {
+            newRules.removeIf(rule -> rule.startsWith("S' ->"));
+            newRules.add("S' -> S | .");
+        }
+
+        return newRules;
+    }
+
+    private static Set<String> identifyNullableVariables(List<String> rules) {
+        Set<String> nullableVariables = new HashSet<>();
+        boolean changed;
+
+        do {
+            changed = false;
+            for (String rule : rules) {
+                if (rule.contains(" -> ")) {
+                    String[] parts = rule.split(" -> ");
+                    String variable = parts[0].trim();
+                    String[] prods = parts[1].split("\\|");
+
+                    for (String prod : prods) {
+                        boolean allNullable = true;
+
+                        for (char c : prod.trim().toCharArray()) {
+                            if (Character.isUpperCase(c) && !nullableVariables.contains(String.valueOf(c))) {
+                                allNullable = false;
+                                break;
+                            }
+                        }
+
+                        if (allNullable || prod.trim().equals(".")) {
+                            if (nullableVariables.add(variable)) {
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+        } while (changed);
+
+        return nullableVariables;
+    }
+
+    private static void generateCombinations(Set<String> newProductions, String production, Set<String> nullableVariables) {
+        char[] chars = production.toCharArray();
+        int n = chars.length;
+
+        for (int i = 0; i < (1 << n); i++) {
+            StringBuilder sb = new StringBuilder();
+
+            for (int j = 0; j < n; j++) {
+                if ((i & (1 << j)) == 0 || !nullableVariables.contains(String.valueOf(chars[j]))) {
+                    sb.append(chars[j]);
+                }
+            }
+
+            String newProd = sb.toString();
+            if (!newProd.isEmpty()) {
+                newProductions.add(newProd);
+            }
+        }
+    }
+
+    private static List<String> removeChainRules(List<String> rules) {
+        Map<String, Set<String>> productions = new HashMap<>();
+
+        for (String rule : rules) {
+            if (rule.contains(" -> ")) {
+                String[] parts = rule.split(" -> ");
+                String variable = parts[0].trim();
+                String[] prods = parts[1].split("\\|");
+                Set<String> prodSet = productions.computeIfAbsent(variable, k -> new HashSet<>());
+
+                for (String prod : prods) {
+                    prodSet.add(prod.trim());
+                }
+            }
+        }
+
+        boolean changed;
+        do {
+            changed = false;
+            Map<String, Set<String>> newProductions = new HashMap<>(productions);
+
+            for (Map.Entry<String, Set<String>> entry : productions.entrySet()) {
+                String variable = entry.getKey();
+                Set<String> prodSet = entry.getValue();
+
+                Set<String> updatedProductions = new HashSet<>();
+                for (String prod : prodSet) {
+                    if (Character.isUpperCase(prod.charAt(0)) && productions.containsKey(prod)) {
+                        updatedProductions.addAll(productions.get(prod));
+                        changed = true;
+                    } else {
+                        updatedProductions.add(prod);
+                    }
+                }
+
+                if (!newProductions.get(variable).equals(updatedProductions)) {
+                    newProductions.put(variable, updatedProductions);
+                }
+            }
+
+            productions = newProductions;
+        } while (changed);
+
+        Set<String> updatedRules = new HashSet<>();
+        for (Map.Entry<String, Set<String>> entry : productions.entrySet()) {
+            String variable = entry.getKey();
+            Set<String> prodSet = entry.getValue();
+
+            if (!prodSet.isEmpty()) {
+                updatedRules.add(variable + " -> " + String.join(" | ", prodSet));
+            }
+        }
+
+        return new ArrayList<>(updatedRules);
+    }
+
+    private static List<String> removeNonGeneratingRules(List<String> rules) {
+        Map<String, Set<String>> productions = new HashMap<>();
+
+        for (String rule : rules) {
+            if (rule.contains(" -> ")) {
+                String[] parts = rule.split(" -> ");
+                String variable = parts[0].trim();
+                String[] prods = parts[1].split("\\|");
+                Set<String> prodSet = productions.computeIfAbsent(variable, k -> new HashSet<>());
+
+                for (String prod : prods) {
+                    prodSet.add(prod.trim());
+                }
+            }
+        }
+
+        Set<String> generatingVariables = new HashSet<>();
+        boolean changed;
+
+        do {
+            changed = false;
+            for (Map.Entry<String, Set<String>> entry : productions.entrySet()) {
+                String variable = entry.getKey();
+                Set<String> prodSet = entry.getValue();
+
+                for (String prod : prodSet) {
+                    if (prod.chars().allMatch(c -> Character.isLowerCase(c) || generatingVariables.contains(String.valueOf((char) c)))) {
+                        if (generatingVariables.add(variable)) {
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        } while (changed);
+
+        List<String> validRules = new ArrayList<>();
+        for (String rule : rules) {
+            if (rule.contains(" -> ")) {
+                String[] parts = rule.split(" -> ");
+                String variable = parts[0].trim();
+
+                if (generatingVariables.contains(variable)) {
+                    validRules.add(rule);
+                }
+            }
+        }
+
+        return validRules;
+    }
+
+    private static List<String> removeUnreachableSymbols(List<String> rules) {
+        Set<String> reachableVariables = new HashSet<>();
+        reachableVariables.add(START_SYMBOL);
+
+        boolean changed;
+
+        do {
+            changed = false;
+            Set<String> newReachableVariables = new HashSet<>(reachableVariables);
+
+            for (String rule : rules) {
+                if (rule.contains(" -> ")) {
+                    String[] parts = rule.split(" -> ");
+                    String variable = parts[0].trim();
+                    String[] prods = parts[1].split("\\|");
+
+                    if (reachableVariables.contains(variable)) {
+                        for (String prod : prods) {
+                            for (char c : prod.trim().toCharArray()) {
+                                if (Character.isUpperCase(c)) {
+                                    newReachableVariables.add(String.valueOf(c));
+                                }
+                            }
+                        }
+
+                        if (!newReachableVariables.equals(reachableVariables)) {
+                            reachableVariables = new HashSet<>(newReachableVariables);
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        } while (changed);
+
+        List<String> validRules = new ArrayList<>();
+        for (String rule : rules) {
+            if (rule.contains(" -> ")) {
+                String[] parts = rule.split(" -> ");
+                String variable = parts[0].trim();
+
+                if (reachableVariables.contains(variable)) {
+                    validRules.add(rule);
+                }
+            }
+        }
+
+        return validRules;
+    }
+
+    private static List<String> replaceTerminalsWithVariables(List<String> rules) {
+        // Mapeamento de terminais para variáveis específicas
+        Map<String, String> terminalToVariable = new HashMap<>();
+        Set<String> usedVariables = new HashSet<>();
+        List<String> terminalRules = new ArrayList<>();
+        List<String> updatedRules = new ArrayList<>();
+        
+        // Identifica terminais que precisam ser substituídos (somente nas produções maiores que 1 e que não são terminais puros)
+        Set<String> terminalsToReplace = new HashSet<>();
+        for (String rule : rules) {
+            if (rule.contains(" -> ")) {
+                String[] parts = rule.split(" -> ");
+                String[] prods = parts[1].split("\\|");
+    
+                for (String prod : prods) {
+                    String trimmedProd = prod.trim();
+                    if (trimmedProd.length() > 1) { // Produções com mais de 1 símbolo
+                        for (char c : trimmedProd.toCharArray()) {
+                            if (Character.isLowerCase(c)) {
+                                terminalsToReplace.add(String.valueOf(c));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    
+        // Cria variáveis para terminais que precisam ser substituídos
+        for (char c = 'a'; c <= 'z'; c++) {
+            String terminal = String.valueOf(c);
+            if (terminalsToReplace.contains(terminal)) {
+                String variable = String.valueOf(Character.toUpperCase(c));
+                if (!usedVariables.contains(variable)) {
+                    terminalToVariable.put(terminal, variable);
+                    usedVariables.add(variable);
+                    terminalRules.add(variable + " -> " + terminal);
+                }
+            }
+        }
+        
+        // Substitui terminais nas regras por suas variáveis correspondentes
+        for (String rule : rules) {
+            if (rule.contains(" -> ")) {
+                String[] parts = rule.split(" -> ");
+                String variable = parts[0].trim();
+                String[] prods = parts[1].split("\\|");
+                Set<String> updatedProds = new HashSet<>();
+        
+                for (String prod : prods) {
+                    String trimmedProd = prod.trim();
+                    StringBuilder newProd = new StringBuilder();
+        
+                    for (char c : trimmedProd.toCharArray()) {
+                        String charStr = String.valueOf(c);
+                        if (Character.isLowerCase(c) && terminalToVariable.containsKey(charStr)) {
+                            newProd.append(terminalToVariable.get(charStr));
+                        } else {
+                            newProd.append(c);
+                        }
+                    }
+        
+                    // Adiciona a produção atualizada, mesmo que não tenha terminais substituídos
+                    if (newProd.length() > 0) { // Garante que apenas produções não vazias são adicionadas
+                        updatedProds.add(newProd.toString());
+                    }
+                }
+        
+                updatedRules.add(variable + " -> " + String.join(" | ", updatedProds));
+            } else {
+                updatedRules.add(rule);
+            }
+        }
+        
+        // Adiciona as regras de terminais no final da lista
+        updatedRules.addAll(terminalRules);
+        
+        return updatedRules;
+    }
+    
+    
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
