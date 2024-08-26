@@ -7,4 +7,34 @@ Programa em Java capaz de converter uma Gramática Livre de Contexto para a Form
 Java program to convert a Context Free Grammar to Chomsky Normal Form.
 
 
+### Using
+
+```
+git clone https://github.com/joaoadn/GLC2FNC
+javac GLCtoFNC.java
+java GLCtoFNC glc1.txt fnc.txt
+```
+
+### Input
+
+```
+S -> aS | bS | C | D
+C -> c | .
+D -> abc
+D -> .
+
+```
+
+FNC (CNF):
+
+```
+S' -> BS | a | AS | b | AT1 | c | .
+S -> BS | a | AS | b | AT1 | c
+A -> a
+B -> b
+C -> c
+T1 -> BC
+
+```
+
 
