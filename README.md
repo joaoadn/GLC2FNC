@@ -1,6 +1,6 @@
 # GLC2FNC
 
-Programa em Java capaz de converter uma Gramática Livre de Contexto, em um arquivo texto de entrada, para a Forma Normal de Chomsky, em um arquivo texto de saída. 
+Programa em Java capaz de converter uma Gramática Livre de Contexto para a Forma Normal de Chomsky.
 
 ## Convert a Context Free Grammar to Chomsky Normal Form
 
