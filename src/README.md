@@ -1,4 +1,4 @@
-## COMPILANDO O PROGRAMA NO TERMINAL
+# COMPILANDO O PROGRAMA NO TERMINAL
 
 javac GLCtoFNC.java
 
@@ -9,3 +9,7 @@ java GLCtoFNC glc1.txt fnc.txt
 ## TESTANDO
 
 Modificar o arquivo glc1_fnc.txt, colocando o conteúdo da GLC que deseja converter.
+
+## AVISO
+
+Lembre de abrir a pasta src para compilar e executar.
