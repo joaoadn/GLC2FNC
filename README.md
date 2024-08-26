@@ -4,7 +4,7 @@ Programa em Java capaz de converter uma Gramática Livre de Contexto, em um arqu
 
 ## Convert a Context Free Grammar to Chomsky Normal Form
 
-Java program to convert a Context Free Grammar to Chomsky Normal Form, manipulating archives to read the input and generate an output archive with the Chomsky Normal Form.
+Java program to convert a Context Free Grammar to Chomsky Normal Form, manipulating archives to read the input and create an output archive with the Chomsky Normal Form.
 
 
 ### Using
