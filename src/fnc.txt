@@ -1,0 +1,6 @@
+S' -> BS | a | AS | b | AT1 | c | .
+S -> BS | a | AS | b | AT1 | c
+A -> a
+B -> b
+C -> c
+T1 -> BC

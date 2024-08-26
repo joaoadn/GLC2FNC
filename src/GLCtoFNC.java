@@ -1,5 +1,6 @@
 import java.io.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class GLCtoFNC {
 
@@ -50,6 +51,7 @@ public class GLCtoFNC {
         rules = removeNonGeneratingRules(rules);
         rules = removeUnreachableSymbols(rules);
         rules = replaceTerminalsWithVariables(rules);
+        rules = convertToBinaryRules(rules);
         return rules;
     }
     
@@ -372,81 +374,108 @@ public class GLCtoFNC {
     }
 
     private static List<String> convertToBinaryRules(List<String> rules) {
-        Map<String, String> variableMap = new HashMap<>();
         List<String> updatedRules = new ArrayList<>();
-        List<String> additionalRules = new ArrayList<>();
-        int variableCounter = 1;
-
-        // Passo 1: Adicionar regras originais e identificar variáveis auxiliares
+        Map<String, List<String>> variableToProdsMap = new LinkedHashMap<>();
+        Map<String, String> ruleToVariableMap = new HashMap<>();
+        List<String> tempVarRules = new ArrayList<>();
+        List<String> terminalRules = new ArrayList<>();
+        int tempVarCount = 1;
+    
+        // Organiza as regras de acordo com suas variáveis
         for (String rule : rules) {
             if (rule.contains(" -> ")) {
                 String[] parts = rule.split(" -> ");
                 String variable = parts[0].trim();
                 String[] prods = parts[1].split("\\|");
-
+                List<String> prodList = variableToProdsMap.computeIfAbsent(variable, k -> new ArrayList<>());
                 for (String prod : prods) {
-                    prod = prod.trim();
-                    if (prod.length() > 2) {
-                        // Criar variáveis auxiliares para regras de comprimento maior
-                        String newVariable = "T" + variableCounter++;
-                        variableMap.put(newVariable, prod);
-                        additionalRules.add(newVariable + " -> " + prod.substring(0, 2));
-                        for (int i = 2; i < prod.length(); i++) {
-                            newVariable = "T" + variableCounter++;
-                            additionalRules.add(newVariable + " -> " + prod.substring(i, i + 2));
-                        }
-                    }
+                    prodList.add(prod.trim());
                 }
             }
         }
-
-        // Passo 2: Atualizar regras para usar variáveis auxiliares
-        Map<String, String> terminalToVariable = new HashMap<>();
-        for (String rule : rules) {
-            if (rule.contains(" -> ")) {
-                String[] parts = rule.split(" -> ");
-                String variable = parts[0].trim();
-                String[] prods = parts[1].split("\\|");
-                Set<String> updatedProds = new HashSet<>();
-
-                for (String prod : prods) {
-                    String trimmedProd = prod.trim();
-                    if (trimmedProd.length() == 1 && Character.isLowerCase(trimmedProd.charAt(0))) {
-                        // Se a produção é um terminal de tamanho 1, mantê-lo inalterado
-                        updatedProds.add(trimmedProd);
+    
+        // Processa cada variável e suas produções
+        for (Map.Entry<String, List<String>> entry : variableToProdsMap.entrySet()) {
+            String variable = entry.getKey();
+            List<String> prods = entry.getValue();
+            List<String> newProds = new ArrayList<>();
+    
+            for (String prod : prods) {
+                List<String> symbols = new ArrayList<>();
+                int i = 0;
+                while (i < prod.length()) {
+                    char currentChar = prod.charAt(i);
+                    if (Character.isUpperCase(currentChar) && i + 1 < prod.length() && prod.charAt(i + 1) == '\'') {
+                        symbols.add(prod.substring(i, i + 2));
+                        i += 2;
+                    } else if (currentChar == 'T' && i + 1 < prod.length() && Character.isDigit(prod.charAt(i + 1))) {
+                        int j = i + 1;
+                        while (j < prod.length() && Character.isDigit(prod.charAt(j))) {
+                            j++;
+                        }
+                        symbols.add(prod.substring(i, j));
+                        i = j;
                     } else {
-                        // Substituir terminais maiores por variáveis
-                        StringBuilder newProd = new StringBuilder();
-                        String[] tokens = trimmedProd.split("(?<=\\G..)");
-                        for (String token : tokens) {
-                            String newVar = variableMap.get(token);
-                            if (newVar != null) {
-                                newProd.append(newVar).append(" ");
-                            } else {
-                                newProd.append(token).append(" ");
-                            }
-                        }
-                        if (newProd.length() > 0) {
-                            updatedProds.add(newProd.toString().trim());
-                        }
+                        symbols.add(String.valueOf(currentChar));
+                        i++;
                     }
                 }
-                updatedRules.add(variable + " -> " + String.join(" | ", updatedProds));
-            } else {
-                updatedRules.add(rule);
+    
+                if (symbols.size() > 2) {
+                    String lastVariable = symbols.get(symbols.size() - 1);
+                    for (int j = symbols.size() - 2; j > 0; j--) {
+                        String subRule = symbols.get(j) + lastVariable;
+                        String newNonTerminal = ruleToVariableMap.get(subRule);
+                        if (newNonTerminal == null) {
+                            newNonTerminal = "T" + tempVarCount++;
+                            ruleToVariableMap.put(subRule, newNonTerminal);
+                            tempVarRules.add(newNonTerminal + " -> " + subRule);
+                        }
+                        lastVariable = newNonTerminal;
+                    }
+                    newProds.add(symbols.get(0) + lastVariable);
+                } else {
+                    newProds.add(prod);
+                }
             }
+    
+            // Atualiza as produções da variável atual
+            String consolidatedProds = variable + " -> " + String.join(" | ", newProds);
+            updatedRules.add(consolidatedProds);
         }
-
-        // Adicionar regras auxiliares
-        updatedRules.addAll(additionalRules);
-
-        // Remover possíveis regras redundantes ou duplicadas
-        Set<String> uniqueRules = new HashSet<>(updatedRules);
-        return new ArrayList<>(uniqueRules);
+    
+        // Adiciona as regras das variáveis temporárias antes das regras de terminais
+        updatedRules.addAll(tempVarRules);
+        // Adiciona as regras de terminais
+        updatedRules.addAll(terminalRules);
+    
+        return mergeDuplicateRules(updatedRules);
     }
     
-}
     
+    // Função para mesclar regras duplicadas (mesma variável, várias linhas)
+    private static List<String> mergeDuplicateRules(List<String> rules) {
+        Map<String, StringBuilder> mergedRules = new LinkedHashMap<>();
+    
+        for (String rule : rules) {
+            String[] parts = rule.split(" -> ");
+            String variable = parts[0].trim();
+            String production = parts[1].trim();
+    
+            mergedRules.computeIfAbsent(variable, k -> new StringBuilder()).append(production).append(" | ");
+        }
+    
+        List<String> finalRules = new ArrayList<>();
+        for (Map.Entry<String, StringBuilder> entry : mergedRules.entrySet()) {
+            String mergedProduction = entry.getValue().toString();
+            // Remove o último " | " extra
+            mergedProduction = mergedProduction.substring(0, mergedProduction.length() - 3);
+            finalRules.add(entry.getKey() + " -> " + mergedProduction);
+        }
+    
+        return finalRules;
+    }
+}
 
 
 

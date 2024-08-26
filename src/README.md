@@ -1,10 +1,10 @@
 ## COMPILANDO O PROGRAMA NO TERMINAL
 
-javac src/GLCtoFNC.java
+javac GLCtoFNC.java
 
 ## EXECUTANDO O PROGRAMA NO TERMINAL
 
-java -cp src GLCtoFNC src/glc1.txt src/fnc.txt
+java GLCtoFNC glc1.txt fnc.txt
 
 ## TESTANDO
 
