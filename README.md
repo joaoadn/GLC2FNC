@@ -13,7 +13,7 @@ Java program to convert a Context Free Grammar to Chomsky Normal Form, manipulat
 Create a file with the Input.
 git clone https://github.com/joaoadn/GLC2FNC
 javac GLCtoFNC.java
-java GLCtoFNC [input] [output] (.txt)
+java GLCtoFNC [inputFile] [outputFile] 
 ```
 
 ### Input [glc1.txt]
